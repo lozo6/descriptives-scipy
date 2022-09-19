@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 from pandas.plotting import scatter_matrix
 import matplotlib.pyplot as plt
-import scipy
 from scipy import stats
 from statsmodels.formula.api import ols
+import seaborn
+import statsmodels.api as sm
 
 # Creating dataframes: reading data files or converting arrays
 
@@ -122,3 +123,74 @@ print(model.summary())
 data = pd.read_csv('data/brain_size.csv', sep=';', na_values=".")
 model = ols("VIQ ~ Gender + 1", data).fit()
 print(model.summary())
+
+# Forcing categorical: the ‘Gender’ is automatically detected as a categorical variable, 
+# and thus each of its different values are treated as different entities.
+model = ols('VIQ ~ C(Gender)', data).fit()
+
+# To compare different types of IQ, we need to create a “long-form” table, 
+# listing IQs, where the type of IQ is indicated by a categorical variable:
+data_fisq = pd.DataFrame({'iq': data['FSIQ'], 'type': 'fsiq'})
+data_piq = pd.DataFrame({'iq': data['PIQ'], 'type': 'piq'})
+data_long = pd.concat((data_fisq, data_piq))
+print(data_long)
+
+model = ols("iq ~ type", data_long).fit()
+print(model.summary())
+
+stats.ttest_ind(data['FSIQ'], data['PIQ'])   
+# Ttest_indResult(statistic=0.46563759638..., pvalue=0.64277250...)
+
+data = pd.read_csv('data/iris.csv')
+model = ols('sepal_width ~ name + petal_length', data).fit()
+print(model.summary())
+# we write a vector of ‘contrast’ on the parameters estimated: we want to test "name[T.versicolor] - name[T.virginica]", with an F-test:
+print(model.f_test([0, 1, -1, 0]))
+
+### EXERCISE 5 ###
+
+# Going back to the brain size + IQ data, 
+# test if the VIQ of male and female are different after removing the effect of brain size, height and weight.
+
+data = pd.read_csv('data/brain_size.csv', sep=';', na_values='.')
+model = ols('VIQ ~ Gender + MRI_Count + Height', data).fit()
+print(model.summary())
+print(model.f_test([0, 1, 0, 0]))
+
+names = [
+    'EDUCATION: Number of years of education',
+    'SOUTH: 1=Person lives in South, 0=Person lives elsewhere',
+    'SEX: 1=Female, 0=Male',
+    'EXPERIENCE: Number of years of work experience',
+    'UNION: 1=Union member, 0=Not union member',
+    'WAGE: Wage (dollars per hour)',
+    'AGE: years',
+    'RACE: 1=Other, 2=Hispanic, 3=White',
+    'OCCUPATION: 1=Management, 2=Sales, 3=Clerical, 4=Service, 5=Professional, 6=Other',
+    'SECTOR: 0=Other, 1=Manufacturing, 2=Construction',
+    'MARR: 0=Unmarried,  1=Married',
+]
+
+short_names = [n.split(':')[0] for n in names]
+
+data = pd.read_csv('data/wages.txt', skiprows=27, skipfooter=6, sep=None, header=None)
+data.columns = short_names
+
+data['WAGE'] = np.log10(data['WAGE'])
+
+# We can easily have an intuition on the interactions between
+# continuous variables using seaborn.pairplot() to display a scatter matrix
+seaborn.pairplot(data, vars=['WAGE', 'AGE', 'EDUCATION'], kind='reg')
+
+# Categorical variables can be plotted as the hue
+seaborn.pairplot(data, vars=['WAGE', 'AGE', 'EDUCATION'], kind='reg', hue='SEX')
+
+# Seaborn changes the default of matplotlib figures to achieve a more “modern”, 
+# “excel-like” look. It does that upon import. You can reset the default using
+plt.rcdefaults()
+
+# A regression capturing the relation between one variable and another, eg wage and eduction, can be plotted using seaborn.lmplot()
+seaborn.lmplot(y='WAGE', x='EDUCATION', data=data)
+
+result = sm.ols(formula='wage ~ education + gender + education * gender', data=data).fit()    
+print(result.summary())
